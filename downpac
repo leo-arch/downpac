@@ -1,7 +1,7 @@
 #!/bin/bash
 #Downpac is a simple script to easily downgrade Arch Linux packages
 
-[[ $# -le 0 ]] && echo "Usage: downgrader pkg_name" && exit 1
+[[ $# -le 0 ]] && echo "Usage: downpac pkg_name" && exit 1
 
 pkg=$1
 arch=$(uname -m)
