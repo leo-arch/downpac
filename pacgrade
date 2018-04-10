@@ -8,7 +8,7 @@ DATE="Apr, 2018"
 
 function help
 {
-	echo "Downgrade or upgrade an Arch Linux official package\nUsage: $PROGRAM_NAME [-v] [-h] pkg_name"
+	echo -e "Downgrade or upgrade an Arch Linux official package\nUsage: $PROGRAM_NAME [-v] [-h] pkg_name"
 }
 
 [[ $# -le 0 ]] && help && exit 1
