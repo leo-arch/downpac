@@ -1,0 +1,99 @@
+#!/bin/bash
+#Pacgrade is a simple bash script to easily downgrade or upgrade Arch Linux packages
+
+PROGRAM_NAME="pacgrade"
+VERSION="0.2-1"
+AUTHOR="L.M. Abramovich"
+DATE="Apr, 2018"
+
+function help
+{
+	echo "Downgrade or upgrade an Arch Linux official package\nUsage: $PROGRAM_NAME [-v] [-h] pkg_name"
+}
+
+[[ $# -le 0 ]] && help && exit 1
+[[ $1 == "-h" || $1 == "--help" ]] && help && exit 0
+[[ $1 == "-v" || $1 == "--version" ]] && echo "Pacgrade v$VERSION ($DATE, by $AUTHOR)" && exit 0
+
+! [[ $(ls /usr/bin/pacman) ]] && echo "Pacman is not installed" && exit 1 
+
+##COLORS##
+white="\033[1;37m"
+blue="\033[1;34m"
+green="\033[1;32m"
+red="\033[1;31m"
+yellow='\033[1;33m'
+nc="\033[0m"
+
+pkg=$1
+arch=$(uname -m)
+user="$([[ $SUDO_USER ]] && echo $SUDO_USER || echo $USER)"
+inst_pkgs=( $(pacman -Qqn) )
+
+#Determine package to be downgraded
+counter=0
+for ((i=0;i<${#inst_pkgs[@]};i++)); do
+	if [[ ${inst_pkgs[$i]} == "$pkg"* ]]; then
+		counter=$((counter+1))
+		matching_pkgs[${#matching_pkgs[@]}]=${inst_pkgs[$i]}
+	fi
+done
+[[ $counter -eq 0 ]] && echo "'$pkg': Not installed or AUR package" && exit 1
+if [[ $counter -gt 1 ]]; then
+	echo
+	for (( i=0;i<${#matching_pkgs[@]};i++ )); do
+		echo -e "${yellow}$((i+1))$nc ${matching_pkgs[$i]}"
+	done
+	echo
+	msg="$(echo -e "${blue}::${nc} ${white}Select a package:$nc ")"
+	read -p "$msg" sel_pkg
+	[[ $sel_pkg == "q" || $sel_pkg == "quit" || $sel_pkg == "exit" ]] && exit 0
+	[[ $sel_pkg -gt $counter || $sel_pkg -le 0 ]] && echo "Invalid entry" && exit 1
+	echo
+else
+	sel_pkg=1
+fi
+
+f_letter=${matching_pkgs[$((sel_pkg-1))]:0:1}
+
+#Get available package versions from archive.archlinux.org
+echo -e "Available versions of ${white}${matching_pkgs[$((sel_pkg-1))]}$nc:"
+cur_ver=$(pacman -Qi ${matching_pkgs[$((sel_pkg-1))]} | grep Version | awk '{print $3}')
+avail_pkg_vers=( $(curl -s https://archive.archlinux.org/packages/${f_letter}/${matching_pkgs[$((sel_pkg-1))]}/ | grep "${arch}\|any" | cut -d'"' -f2 | grep "tar.xz"$) )
+for (( i=0;i<${#avail_pkg_vers[@]};i++ )); do
+	pkg_ver=$(echo "${avail_pkg_vers[$i]}" | rev | cut -d"-" -f2-3 | rev)	
+	echo -ne "${blue}$((i+1))$nc "
+	[[ $pkg_ver == $cur_ver ]] && echo -e "${white}$pkg_ver [installed]$nc" || echo "$pkg_ver"
+done
+
+[[ $i -eq 0 ]] && echo "No packages found" && exit 1 
+echo
+msg=$(echo -e "${blue}:: ${white}Choose a package:$nc ")
+read -p "$msg" ver
+[[ $ver == "q" || $ver == "quit" || $ver == "exit" ]] && exit 0
+[[ $ver -gt ${#avail_pkg_vers[@]} || $ver -le 0 ]] && echo "Invalid entry" && exit 1
+down_ver=$(echo "${avail_pkg_vers[$((ver-1))]}" | rev | cut -d"-" -f2-3 | rev)
+ver_cmp=$(vercmp $cur_ver $down_ver)
+if [[ $ver_cmp -eq 0 ]]; then
+	echo "'${avail_pkg_vers[$((ver-1))]}' already installed" && exit 0
+elif [[ $ver_cmp -gt 0 ]]; then 
+	echo -e "Downgrading ${white}${matching_pkgs[$((sel_pkg-1))]}$nc to version ${green}$down_ver$nc"
+else
+	echo -e "Upgrading ${white}${matching_pkgs[$((sel_pkg-1))]}$nc to version ${green}$down_ver$nc"
+fi
+
+#Downgrade package
+TMP_DIR="/tmp/downgrader"
+old_cwd=$PWD
+[[ ! -d $TMP_DIR ]] && mkdir -p $TMP_DIR
+cd $TMP_DIR
+curl -o ${TMP_DIR}/${avail_pkg_vers[$((ver-1))]} https://archive.archlinux.org/packages/${f_letter}/${matching_pkgs[$((sel_pkg-1))]}/${avail_pkg_vers[$((ver-1))]}
+[[ $? -ne 0 ]] && exit 1
+[[ ! -f ${TMP_DIR}/${avail_pkg_vers[$((ver-1))]} ]] && echo -e "Error downloading package" && exit 1
+sudo -u root pacman -U ${avail_pkg_vers[$((ver-1))]}
+
+#Remove downloaded package
+rm ${TMP_DIR}/${avail_pkg_vers[$((ver-1))]}
+cd $old_cwd
+
+exit 0
