@@ -1,4 +1,4 @@
-# Downpac
-Downpac is a simple script to easily downgrade Arch Linux packages
+# Pacgrade
+Pacgrade is a simple script to easily downgrade or upgrade Arch Linux official packages
 
-Usage: downpac pkg_name
+Usage: pacgrade [-v] [-h] pkg_name
